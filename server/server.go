@@ -84,7 +84,11 @@ func (s *Server) handleCmdSet(conn *resp.Conn, cmd resp.Command) error {
 	if len(args) < 3 {
 		return conn.WriteErrorInvalidCmd()
 	}
-	s.store.Put(args[1], args[2])
+	if px, ok := cmd.OptionSetEx(); ok {
+		s.store.PutEx(args[1], args[2], px)
+	} else {
+		s.store.Put(args[1], args[2])
+	}
 	return conn.WriteStatusOK()
 }
 

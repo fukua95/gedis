@@ -3,6 +3,8 @@ package storage
 import (
 	"sync"
 	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/util"
 )
 
 type Key string
@@ -28,11 +30,12 @@ func (s *Store) Put(key []byte, value []byte) {
 	s.m.Store(k, v)
 }
 
-func (s *Store) PutEx(key []byte, value []byte, ex int) {
+func (s *Store) PutEx(key []byte, value []byte, ex []byte) {
+	e, _ := util.Atoi(ex)
 	k := Key(key)
 	v := Value{
 		v:  value,
-		ex: time.Duration(time.Now().UnixMilli() + int64(ex)),
+		ex: time.Duration(time.Now().UnixMilli() + int64(e)),
 	}
 	s.m.Store(k, v)
 }

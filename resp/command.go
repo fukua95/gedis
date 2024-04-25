@@ -14,6 +14,7 @@ type Command interface {
 	Name() string
 	Args() [][]byte
 	StringArg(pos int) (string, error)
+	OptionSetEx() ([]byte, bool)
 }
 
 type command struct {
@@ -50,4 +51,13 @@ func (cmd *command) IntArg(pos int) (int, error) {
 	}
 	arg := cmd.args[pos]
 	return strconv.Atoi(string(arg))
+}
+
+func (cmd *command) OptionSetEx() ([]byte, bool) {
+	for i := 3; i < len(cmd.args); i++ {
+		if strings.ToLower(string(cmd.args[i])) == OptionSetEx && i+1 < len(cmd.args) {
+			return cmd.args[i+1], true
+		}
+	}
+	return nil, false
 }

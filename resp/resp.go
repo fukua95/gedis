@@ -25,3 +25,7 @@ const (
 	CmdPing = "ping"
 	CmdEcho = "echo"
 )
+
+const (
+	OptionSetEx = "px"
+)
