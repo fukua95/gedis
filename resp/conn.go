@@ -41,7 +41,10 @@ func (conn *Conn) WriteString(s string) error {
 }
 
 func (conn *Conn) WriteNilBulkString() error {
-	return conn.w.WriteNilBulkString()
+	if err := conn.w.WriteNilBulkString(); err != nil {
+		return err
+	}
+	return conn.w.Flush()
 }
 
 func (conn *Conn) WriteArray(a [][]byte) error {
