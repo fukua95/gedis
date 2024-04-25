@@ -1,4 +1,4 @@
-package conn
+package resp
 
 // redis resp protocol data type.
 const (
