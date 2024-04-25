@@ -82,7 +82,9 @@ func (s *Server) handleCmdSet(conn *resp.Conn, cmd resp.Command) error {
 	if len(args) < 3 {
 		return conn.WriteErrorInvalidCmd()
 	}
-	s.kv.Store(args[1], args[2])
+	// golang's func, map, slice 不支持 hash, 所以不能作为 map/sync.map 的 key.
+	// arg 是 []byte, 先转化为 string.
+	s.kv.Store(string(args[1]), string(args[2]))
 	return conn.WriteStatusOK()
 }
 
@@ -91,7 +93,7 @@ func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
 	if len(args) < 2 {
 		return conn.WriteErrorInvalidCmd()
 	}
-	val, ok := s.kv.Load(args[1])
+	val, ok := s.kv.Load(string(args[1]))
 	if !ok {
 		return conn.WriteNilBulkString()
 	}
