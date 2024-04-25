@@ -24,6 +24,18 @@ func (w *Writer) WriteStatus(b []byte) error {
 	return err
 }
 
+func (w *Writer) WriteError(e []byte) error {
+	line := fmt.Sprintf("%cERR %s\r\n", RespError, e)
+	_, err := w.w.Write([]byte(line))
+	return err
+}
+
+func (w *Writer) WriteNilBulkString() error {
+	line := fmt.Sprintf("%c-1\r\n", RespString)
+	_, err := w.w.Write([]byte(line))
+	return err
+}
+
 func (w *Writer) WriteBytes(b []byte) error {
 	line := fmt.Sprintf("%c%s\r\n%s\r\n", RespString, util.Itoa(len(b)), b)
 	_, err := w.w.Write([]byte(line))

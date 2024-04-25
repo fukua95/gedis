@@ -29,6 +29,10 @@ func (conn *Conn) WriteStatus(b []byte) error {
 	return conn.w.Flush()
 }
 
+func (conn *Conn) WriteStatusOK() error {
+	return conn.WriteStatus([]byte("OK"))
+}
+
 func (conn *Conn) WriteString(s string) error {
 	if err := conn.w.WriteBytes([]byte(s)); err != nil {
 		return err
@@ -36,8 +40,19 @@ func (conn *Conn) WriteString(s string) error {
 	return conn.w.Flush()
 }
 
+func (conn *Conn) WriteNilBulkString() error {
+	return conn.w.WriteNilBulkString()
+}
+
 func (conn *Conn) WriteArray(a [][]byte) error {
 	if err := conn.w.WriteArray(a); err != nil {
+		return err
+	}
+	return conn.w.Flush()
+}
+
+func (conn *Conn) WriteErrorInvalidCmd() error {
+	if err := conn.w.WriteError([]byte("Invalid Command")); err != nil {
 		return err
 	}
 	return conn.w.Flush()

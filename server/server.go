@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
 )
@@ -11,6 +12,7 @@ import (
 type Server struct {
 	network string
 	address string
+	kv      sync.Map
 }
 
 func NewServer() *Server {
@@ -57,12 +59,41 @@ func (s *Server) handleConn(conn *resp.Conn) {
 			args := cmd.Args()
 			args = args[1:]
 			if len(args) == 1 {
-				conn.WriteString(string(args[0]))
+				err = conn.WriteString(string(args[0]))
 			} else {
-				conn.WriteArray(args[1:])
+				err = conn.WriteArray(args[1:])
 			}
 		case resp.CmdPing:
-			conn.WriteString("PONG")
+			err = conn.WriteString("PONG")
+		case resp.CmdSet:
+			err = s.handleCmdSet(conn, cmd)
+		case resp.CmdGet:
+			err = s.handleCmdGet(conn, cmd)
+		}
+		if err != nil {
+			fmt.Println("Error handle command: ", err.Error())
+			return
 		}
 	}
+}
+
+func (s *Server) handleCmdSet(conn *resp.Conn, cmd resp.Command) error {
+	args := cmd.Args()
+	if len(args) < 3 {
+		return conn.WriteErrorInvalidCmd()
+	}
+	s.kv.Store(args[1], args[2])
+	return conn.WriteStatusOK()
+}
+
+func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
+	args := cmd.Args()
+	if len(args) < 2 {
+		return conn.WriteErrorInvalidCmd()
+	}
+	val, ok := s.kv.Load(args[1])
+	if !ok {
+		return conn.WriteNilBulkString()
+	}
+	return conn.WriteString(val.(string))
 }
