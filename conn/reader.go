@@ -25,6 +25,10 @@ func (r *Reader) ReadCommand() (Command, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len == 0 {
+		return nil, fmt.Errorf("invalid command, size=0")
+	}
+
 	cmd.args = make([][]byte, len)
 	for i := 0; i < len; i++ {
 		arg, err := r.readArg()
