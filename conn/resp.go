@@ -18,3 +18,10 @@ const (
 	RespAttr      = '|' // |<len>\r\n(key)\r\n(value)\r\n... + command reply
 	RespPush      = '>' // ><len>\r\n
 )
+
+const (
+	CmdSet  = "set"
+	CmdGet  = "get"
+	CmdPing = "ping"
+	CmdEcho = "echo"
+)
