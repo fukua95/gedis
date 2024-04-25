@@ -10,7 +10,7 @@ type Conn struct {
 	w       *Writer
 }
 
-func NetConn(conn net.Conn) *Conn {
+func NewConn(conn net.Conn) *Conn {
 	return &Conn{
 		netConn: conn,
 		r:       NewReader(conn),
@@ -45,4 +45,11 @@ func (conn *Conn) WriteArray(a [][]byte) error {
 
 func (conn *Conn) Flush() error {
 	return conn.w.Flush()
+}
+
+func (conn *Conn) Close() error {
+	if err := conn.w.Flush(); err != nil {
+		return err
+	}
+	return conn.netConn.Close()
 }
