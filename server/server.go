@@ -4,19 +4,21 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
+	"github.com/codecrafters-io/redis-starter-go/storage"
 )
 
 type Server struct {
 	network string
 	address string
-	kv      sync.Map
+	store   *storage.Store
 }
 
 func NewServer() *Server {
-	return &Server{}
+	return &Server{
+		store: storage.NewStore(),
+	}
 }
 
 func (s *Server) ListenAndServe(network string, address string) error {
@@ -82,9 +84,7 @@ func (s *Server) handleCmdSet(conn *resp.Conn, cmd resp.Command) error {
 	if len(args) < 3 {
 		return conn.WriteErrorInvalidCmd()
 	}
-	// golang's func, map, slice 不支持 hash, 所以不能作为 map/sync.map 的 key.
-	// arg 是 []byte, 先转化为 string.
-	s.kv.Store(string(args[1]), string(args[2]))
+	s.store.Put(args[1], args[2])
 	return conn.WriteStatusOK()
 }
 
@@ -93,9 +93,9 @@ func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
 	if len(args) < 2 {
 		return conn.WriteErrorInvalidCmd()
 	}
-	val, ok := s.kv.Load(string(args[1]))
+	val, ok := s.store.Get(args[1])
 	if !ok {
 		return conn.WriteNilBulkString()
 	}
-	return conn.WriteString(val.(string))
+	return conn.WriteString(string(val))
 }
