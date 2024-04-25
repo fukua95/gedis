@@ -55,7 +55,12 @@ func (s *Server) handleConn(conn *resp.Conn) {
 		switch cmd.Name() {
 		case resp.CmdEcho:
 			args := cmd.Args()
-			conn.WriteArray(args[1:])
+			args = args[1:]
+			if len(args) == 1 {
+				conn.WriteString(string(args[0]))
+			} else {
+				conn.WriteArray(args[1:])
+			}
 		case resp.CmdPing:
 			conn.WriteString("PONG")
 		}
