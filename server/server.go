@@ -110,12 +110,10 @@ func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
 }
 
 func (s *Server) handleCmdInfo(conn *resp.Conn, _ resp.Command) error {
-	info := [][]byte{
-		[]byte(fmt.Sprintf("role:%s", s.repl.role)),
-	}
+	info := fmt.Sprintf("role:%s", s.repl.role)
 	if s.repl.role == roleMaster {
-		info = append(info, []byte(fmt.Sprintf("master_replid:%s", s.repl.masterReplID)))
-		info = append(info, []byte(fmt.Sprintf("master_repl_offset:%s", util.Itoa(s.repl.masterReplOffset))))
+		info = fmt.Sprintf("%s\nmaster_replid:%s\nmaster_repl_offset:%s",
+			info, s.repl.masterReplID, util.Itoa(s.repl.masterReplOffset))
 	}
-	return conn.WriteArray(info)
+	return conn.WriteString(info)
 }
