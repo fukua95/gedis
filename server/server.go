@@ -15,16 +15,16 @@ type Server struct {
 	store   *storage.Store
 }
 
-func NewServer() *Server {
+func NewServer(network string, port string) *Server {
 	return &Server{
-		store: storage.NewStore(),
+		network: network,
+		address: fmt.Sprintf("0.0.0.0:%s", port),
+		store:   storage.NewStore(),
 	}
 }
 
-func (s *Server) ListenAndServe(network string, address string) error {
-	s.network = network
-	s.address = address
-	l, err := net.Listen(network, address)
+func (s *Server) ListenAndServe() error {
+	l, err := net.Listen(s.network, s.address)
 	if err != nil {
 		fmt.Println("listen error: ", err.Error())
 		return err
