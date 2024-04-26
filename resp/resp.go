@@ -24,8 +24,10 @@ const (
 	CmdGet  = "get"
 	CmdPing = "ping"
 	CmdEcho = "echo"
+	CmdInfo = "info"
 )
 
 const (
-	OptionSetEx = "px"
+	OptionSetEx   = "px"
+	OptionInfoRep = "replication"
 )

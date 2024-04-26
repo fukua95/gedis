@@ -13,6 +13,7 @@ type Server struct {
 	network string
 	address string
 	store   *storage.Store
+	rep     *replication
 }
 
 func NewServer(network string, port string) *Server {
@@ -20,6 +21,7 @@ func NewServer(network string, port string) *Server {
 		network: network,
 		address: fmt.Sprintf("0.0.0.0:%s", port),
 		store:   storage.NewStore(),
+		rep:     newReplication(master),
 	}
 }
 
@@ -71,6 +73,8 @@ func (s *Server) handleConn(conn *resp.Conn) {
 			err = s.handleCmdSet(conn, cmd)
 		case resp.CmdGet:
 			err = s.handleCmdGet(conn, cmd)
+		case resp.CmdInfo:
+			err = s.handleCmdInfo(conn, cmd)
 		}
 		if err != nil {
 			fmt.Println("Error handle command: ", err.Error())
@@ -102,4 +106,9 @@ func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
 		return conn.WriteNilBulkString()
 	}
 	return conn.WriteString(string(val))
+}
+
+func (s *Server) handleCmdInfo(conn *resp.Conn, _ resp.Command) error {
+	val := fmt.Sprintf("role:%s", s.rep.role)
+	return conn.WriteString(val)
 }
