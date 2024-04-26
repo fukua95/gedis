@@ -16,12 +16,12 @@ type Server struct {
 	rep     *replication
 }
 
-func NewServer(network string, port string) *Server {
+func NewServer(conf *Config) *Server {
 	return &Server{
-		network: network,
-		address: fmt.Sprintf("0.0.0.0:%s", port),
+		network: conf.network,
+		address: conf.addr,
+		rep:     newReplication(conf.isSlave, conf.masterAddr),
 		store:   storage.NewStore(),
-		rep:     newReplication(master),
 	}
 }
 
