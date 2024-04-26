@@ -7,20 +7,21 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
 	"github.com/codecrafters-io/redis-starter-go/storage"
+	"github.com/codecrafters-io/redis-starter-go/util"
 )
 
 type Server struct {
 	network string
 	address string
 	store   *storage.Store
-	rep     *replication
+	repl    *replication
 }
 
 func NewServer(conf *Config) *Server {
 	return &Server{
 		network: conf.network,
 		address: conf.addr,
-		rep:     newReplication(conf.isSlave, conf.masterAddr),
+		repl:    newReplication(conf.isSlave, conf.masterAddr),
 		store:   storage.NewStore(),
 	}
 }
@@ -109,6 +110,12 @@ func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
 }
 
 func (s *Server) handleCmdInfo(conn *resp.Conn, _ resp.Command) error {
-	val := fmt.Sprintf("role:%s", s.rep.role)
-	return conn.WriteString(val)
+	info := [][]byte{
+		[]byte(fmt.Sprintf("role:%s", s.repl.role)),
+	}
+	if s.repl.role == roleMaster {
+		info = append(info, []byte(fmt.Sprintf("master_replid:%s", s.repl.masterReplID)))
+		info = append(info, []byte(fmt.Sprintf("master_repl_offset:%s", util.Itoa(s.repl.masterReplOffset))))
+	}
+	return conn.WriteArray(info)
 }
