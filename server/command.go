@@ -1,4 +1,4 @@
-package resp
+package server
 
 import (
 	"errors"
@@ -14,12 +14,15 @@ type Command interface {
 	Name() string
 	Args() [][]byte
 	StringArg(pos int) (string, error)
-	OptionSetEx() ([]byte, bool)
+	SearchOption(op string) ([]byte, bool)
 	SetArgs(b [][]byte)
+	Result() interface{}
+	SetResult(res interface{})
 }
 
 type command struct {
-	args [][]byte
+	args   [][]byte
+	result any
 }
 
 func (cmd *command) Name() string {
@@ -54,9 +57,9 @@ func (cmd *command) IntArg(pos int) (int, error) {
 	return strconv.Atoi(string(arg))
 }
 
-func (cmd *command) OptionSetEx() ([]byte, bool) {
+func (cmd *command) SearchOption(op string) ([]byte, bool) {
 	for i := 3; i < len(cmd.args); i++ {
-		if strings.ToLower(string(cmd.args[i])) == OptionSetEx && i+1 < len(cmd.args) {
+		if strings.ToLower(string(cmd.args[i])) == op && i+1 < len(cmd.args) {
 			return cmd.args[i+1], true
 		}
 	}
@@ -65,4 +68,12 @@ func (cmd *command) OptionSetEx() ([]byte, bool) {
 
 func (cmd *command) SetArgs(b [][]byte) {
 	cmd.args = b
+}
+
+func (cmd *command) Result() interface{} {
+	return cmd.result
+}
+
+func (cmd *command) SetResult(r interface{}) {
+	cmd.result = r
 }

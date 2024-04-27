@@ -20,14 +20,31 @@ const (
 )
 
 const (
-	CmdSet  = "set"
-	CmdGet  = "get"
-	CmdPing = "ping"
-	CmdEcho = "echo"
-	CmdInfo = "info"
+	CmdSet   = "set"
+	CmdGet   = "get"
+	CmdPing  = "ping"
+	CmdEcho  = "echo"
+	CmdInfo  = "info"
+	CmdRepl  = "replconf"
+	CmdPsync = "psync"
 )
 
 const (
-	OptionSetEx   = "px"
-	OptionInfoRep = "replication"
+	OptionSetEx     = "px"
+	OptionInfoRep   = "replication"
+	OptionReplLPort = "listening-port"
+	OptionReplCapa  = "capa"
 )
+
+/*
+var OptionArgMap = map[string]int{
+	OptionPsync: 2,
+}
+
+func OptionArgCount(op string) int {
+	if v, has := OptionArgMap[op]; has {
+		return v
+	}
+	return 1
+}
+*/

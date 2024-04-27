@@ -1,20 +1,22 @@
-package resp
+package server
 
 import (
 	"net"
+
+	"github.com/codecrafters-io/redis-starter-go/resp"
 )
 
 type Conn struct {
 	netConn net.Conn
-	r       *Reader
-	w       *Writer
+	r       *resp.Reader
+	w       *resp.Writer
 }
 
 func NewConn(conn net.Conn) *Conn {
 	return &Conn{
 		netConn: conn,
-		r:       NewReader(conn),
-		w:       NewWriter(conn),
+		r:       resp.NewReader(conn),
+		w:       resp.NewWriter(conn),
 	}
 }
 
@@ -28,7 +30,15 @@ func (conn *Conn) ReadCommand() (Command, error) {
 }
 
 func (conn *Conn) WriteCommand(cmd Command) error {
-	return conn.WriteSlice(cmd.Args())
+	if err := conn.WriteSlice(cmd.Args()); err != nil {
+		return err
+	}
+	res, err := conn.r.ReadReply()
+	if err != nil {
+		return err
+	}
+	cmd.SetResult(res)
+	return nil
 }
 
 func (conn *Conn) WriteStatus(b []byte) error {
