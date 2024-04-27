@@ -10,24 +10,43 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/util"
 )
 
+type role string
+
+const (
+	roleMaster role = "master"
+	roleSlave  role = "slave"
+)
+
 type Server struct {
 	network string
-	address string
+	addr    string
 	store   *storage.Store
-	repl    *replication
+
+	role             role
+	masterReplID     string
+	masterReplOffset int
+	masterAddr       string
 }
 
 func NewServer(conf *Config) *Server {
-	return &Server{
-		network: conf.network,
-		address: conf.addr,
-		repl:    newReplication(conf.isSlave, conf.masterAddr),
-		store:   storage.NewStore(),
+	s := &Server{
+		network:    conf.network,
+		addr:       conf.addr,
+		store:      storage.NewStore(),
+		masterAddr: conf.masterAddr,
 	}
+	if conf.isSlave {
+		s.role = roleSlave
+	} else {
+		s.role = roleMaster
+		s.masterReplID = util.RandomAlphanumericString(40)
+		s.masterReplOffset = 0
+	}
+	return s
 }
 
 func (s *Server) ListenAndServe() error {
-	l, err := net.Listen(s.network, s.address)
+	l, err := net.Listen(s.network, s.addr)
 	if err != nil {
 		fmt.Println("listen error: ", err.Error())
 		return err
@@ -110,10 +129,10 @@ func (s *Server) handleCmdGet(conn *resp.Conn, cmd resp.Command) error {
 }
 
 func (s *Server) handleCmdInfo(conn *resp.Conn, _ resp.Command) error {
-	info := fmt.Sprintf("role:%s", s.repl.role)
-	if s.repl.role == roleMaster {
+	info := fmt.Sprintf("role:%s", s.role)
+	if s.role == roleMaster {
 		info = fmt.Sprintf("%s\nmaster_replid:%s\nmaster_repl_offset:%s",
-			info, s.repl.masterReplID, util.Itoa(s.repl.masterReplOffset))
+			info, s.masterReplID, util.Itoa(s.masterReplOffset))
 	}
 	return conn.WriteString(info)
 }
