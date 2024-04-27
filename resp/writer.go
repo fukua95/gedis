@@ -42,7 +42,7 @@ func (w *Writer) WriteBytes(b []byte) error {
 	return err
 }
 
-func (w *Writer) WriteArray(arr [][]byte) error {
+func (w *Writer) WriteSlice(arr [][]byte) error {
 	line := fmt.Sprintf("%c%s\r\n", RespArray, util.Itoa(len(arr)))
 	_, err := w.w.Write([]byte(line))
 	if err != nil {

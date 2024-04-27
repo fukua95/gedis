@@ -19,7 +19,16 @@ func NewConn(conn net.Conn) *Conn {
 }
 
 func (conn *Conn) ReadCommand() (Command, error) {
-	return conn.r.ReadCommand()
+	args, err := conn.r.ReadSlice()
+	if err != nil {
+		return nil, err
+	}
+	cmd := &command{args: args}
+	return cmd, nil
+}
+
+func (conn *Conn) WriteCommand(cmd Command) error {
+	return conn.WriteSlice(cmd.Args())
 }
 
 func (conn *Conn) WriteStatus(b []byte) error {
@@ -47,8 +56,8 @@ func (conn *Conn) WriteNilBulkString() error {
 	return conn.w.Flush()
 }
 
-func (conn *Conn) WriteArray(a [][]byte) error {
-	if err := conn.w.WriteArray(a); err != nil {
+func (conn *Conn) WriteSlice(a [][]byte) error {
+	if err := conn.w.WriteSlice(a); err != nil {
 		return err
 	}
 	return conn.w.Flush()

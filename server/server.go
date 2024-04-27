@@ -66,7 +66,7 @@ func (s *Server) handleConn(conn *resp.Conn) {
 			if len(args) == 1 {
 				err = conn.WriteString(string(args[0]))
 			} else {
-				err = conn.WriteArray(args[1:])
+				err = conn.WriteSlice(args[1:])
 			}
 		case resp.CmdPing:
 			err = conn.WriteString("PONG")

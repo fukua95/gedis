@@ -15,6 +15,7 @@ type Command interface {
 	Args() [][]byte
 	StringArg(pos int) (string, error)
 	OptionSetEx() ([]byte, bool)
+	SetArgs(b [][]byte)
 }
 
 type command struct {
@@ -60,4 +61,8 @@ func (cmd *command) OptionSetEx() ([]byte, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (cmd *command) SetArgs(b [][]byte) {
+	cmd.args = b
 }
