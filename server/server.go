@@ -195,7 +195,7 @@ func (s *Server) asReplica() {
 func (s *Server) handshake(conn *Conn) error {
 	cmd := &command{args: [][]byte{[]byte(resp.CmdPing)}}
 	if err := s.WriteCmdAndCheckReply(conn, cmd, "pong"); err != nil {
-		return nil
+		return err
 	}
 
 	cmd = &command{
