@@ -57,6 +57,13 @@ func (w *Writer) WriteSlice(arr [][]byte) error {
 	return nil
 }
 
+func (w *Writer) WriteRdb(content []byte) error {
+	// rdb 和 bulk string 的区别: 结尾没有 \r\n
+	line := fmt.Sprintf("%c%s\r\n%s", RespString, util.Itoa(len(content)), content)
+	_, err := w.w.Write([]byte(line))
+	return err
+}
+
 /*
 func (w *Writer) writeEnd() error {
 	err := w.w.WriteByte('\r')

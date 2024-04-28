@@ -29,16 +29,22 @@ func (conn *Conn) ReadCommand() (Command, error) {
 	return cmd, nil
 }
 
-func (conn *Conn) WriteCommand(cmd Command) error {
-	if err := conn.WriteSlice(cmd.Args()); err != nil {
-		return err
-	}
-	res, err := conn.r.ReadReply()
+// golang 目前不支持 struct's method type.
+func (conn *Conn) ReadStatusReply() (string, error) {
+	v, err := conn.r.ReadReply()
 	if err != nil {
-		return err
+		return "", err
 	}
-	cmd.SetResult(res)
-	return nil
+	return v.(string), nil
+}
+
+func (conn *Conn) ReadBytesReply() ([]byte, error) {
+	s, err := conn.r.ReadString()
+	return []byte(s), err
+}
+
+func (conn *Conn) WriteCommand(cmd Command) error {
+	return conn.WriteSlice(cmd.Args())
 }
 
 func (conn *Conn) WriteStatus(b []byte) error {
@@ -68,6 +74,13 @@ func (conn *Conn) WriteNilBulkString() error {
 
 func (conn *Conn) WriteSlice(a [][]byte) error {
 	if err := conn.w.WriteSlice(a); err != nil {
+		return err
+	}
+	return conn.w.Flush()
+}
+
+func (conn *Conn) WriteRdb(content []byte) error {
+	if err := conn.w.WriteRdb(content); err != nil {
 		return err
 	}
 	return conn.w.Flush()

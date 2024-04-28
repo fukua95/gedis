@@ -2,12 +2,17 @@ package resp
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/util"
+)
+
+var (
+	ErrInvalidReply = errors.New("invalid reply")
 )
 
 type Reader struct {

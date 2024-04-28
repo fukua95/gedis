@@ -20,13 +20,13 @@ const (
 )
 
 const (
-	CmdSet   = "set"
-	CmdGet   = "get"
-	CmdPing  = "ping"
-	CmdEcho  = "echo"
-	CmdInfo  = "info"
-	CmdRepl  = "replconf"
-	CmdPsync = "psync"
+	CmdSet      = "set"
+	CmdGet      = "get"
+	CmdPing     = "ping"
+	CmdEcho     = "echo"
+	CmdInfo     = "info"
+	CmdReplConf = "replconf"
+	CmdPsync    = "psync"
 )
 
 const (
@@ -34,6 +34,11 @@ const (
 	OptionInfoRep   = "replication"
 	OptionReplLPort = "listening-port"
 	OptionReplCapa  = "capa"
+)
+
+const (
+	// client 对大小写敏感, 需要全大写.
+	ReplyFullResync = "FULLRESYNC"
 )
 
 /*
