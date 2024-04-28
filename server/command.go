@@ -13,7 +13,7 @@ var (
 type Command interface {
 	Name() string
 	Args() [][]byte
-	StringArg(pos int) (string, error)
+	At(pos int) []byte
 	SearchOption(op string) ([]byte, bool)
 	SetArgs(b [][]byte)
 	Result() interface{}
@@ -29,23 +29,18 @@ func (cmd *command) Name() string {
 	if len(cmd.args) == 0 {
 		return ""
 	}
-	name, err := cmd.StringArg(0)
-	if err != nil {
-		return ""
-	}
-	return strings.ToLower(name)
+	return strings.ToLower(string(cmd.At(0)))
 }
 
 func (cmd *command) Args() [][]byte {
 	return cmd.args
 }
 
-func (cmd *command) StringArg(pos int) (string, error) {
+func (cmd *command) At(pos int) []byte {
 	if pos < 0 || pos >= len(cmd.args) {
-		return "", ErrIndexOutOfRange
+		panic(ErrIndexOutOfRange)
 	}
-	arg := cmd.args[pos]
-	return string(arg), nil
+	return cmd.args[pos]
 }
 
 // don't use.

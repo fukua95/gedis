@@ -14,8 +14,8 @@ import (
 type role string
 
 const (
-	roleMaster role = "master"
-	roleSlave  role = "slave"
+	roleMaster  role = "master"
+	roleReplica role = "replica"
 )
 
 type Server struct {
@@ -26,38 +26,34 @@ type Server struct {
 
 	role role
 
-	masterReplID     string
-	masterReplOffset int
-	slavePort        string
-	slaveCapa        string
+	// for master
+	replID     string
+	replOffset int
 
+	// for replica
 	masterAddr string
 }
 
 func NewServer(conf *Config) *Server {
 	s := &Server{
-		network:    conf.network,
-		port:       conf.port,
-		addr:       conf.addr,
-		store:      storage.NewStore(),
-		masterAddr: conf.masterAddr,
+		network: conf.network,
+		port:    conf.port,
+		addr:    conf.addr,
+		store:   storage.NewStore(),
+		role:    conf.role,
 	}
-	if conf.isSlave {
-		s.role = roleSlave
-		s.slavePort = s.port
-	} else {
-		s.role = roleMaster
-		s.masterReplID = util.RandomAlphanumericString(40)
-		s.masterReplOffset = 0
+	if s.role == roleMaster {
+		s.replID = util.RandomAlphanumericString(40)
+		s.replOffset = 0
+	}
+	if s.role == roleReplica {
+		s.masterAddr = conf.masterAddr
+		go s.asReplica()
 	}
 	return s
 }
 
 func (s *Server) ListenAndServe() error {
-	if s.role == roleSlave {
-		go s.replicate()
-	}
-
 	l, err := net.Listen(s.network, s.addr)
 	if err != nil {
 		fmt.Println("listen error: ", err.Error())
@@ -68,17 +64,17 @@ func (s *Server) ListenAndServe() error {
 	fmt.Println("Server start to accept requests")
 
 	for {
-		c, err := l.Accept()
+		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("accept error: ", err.Error())
 			return err
 		}
-		conn := NewConn(c)
 		go s.handleConn(conn)
 	}
 }
 
-func (s *Server) handleConn(conn *Conn) {
+func (s *Server) handleConn(c net.Conn) {
+	conn := NewConn(c)
 	defer conn.Close()
 
 	for {
@@ -90,15 +86,10 @@ func (s *Server) handleConn(conn *Conn) {
 			fmt.Println("Error reading from conn: ", err.Error())
 			return
 		}
+
 		switch cmd.Name() {
 		case resp.CmdEcho:
-			args := cmd.Args()
-			args = args[1:]
-			if len(args) == 1 {
-				err = conn.WriteString(string(args[0]))
-			} else {
-				err = conn.WriteSlice(args[1:])
-			}
+			err = conn.WriteString(string(cmd.At(1)))
 		case resp.CmdPing:
 			err = conn.WriteString("PONG")
 		case resp.CmdSet:
@@ -148,37 +139,31 @@ func (s *Server) info(conn *Conn, _ Command) error {
 	info := fmt.Sprintf("role:%s", s.role)
 	if s.role == roleMaster {
 		info = fmt.Sprintf("%s\nmaster_replid:%s\nmaster_repl_offset:%s",
-			info, s.masterReplID, util.Itoa(s.masterReplOffset))
+			info, s.replID, util.Itoa(s.replOffset))
 	}
 	return conn.WriteString(info)
 }
 
-func (s *Server) replconf(conn *Conn, cmd Command) error {
-	if port, has := cmd.SearchOption(resp.OptionReplLPort); has {
-		s.slavePort = string(port[0])
-	}
-	if capa, has := cmd.SearchOption(resp.OptionReplCapa); has {
-		s.slaveCapa = string(capa[0])
-	}
+func (s *Server) replconf(conn *Conn, _ Command) error {
 	return conn.WriteStatusOK()
 }
 
 func (s *Server) psync(conn *Conn, _ Command) error {
-	status := fmt.Sprintf("FULLRESYNC %s %s", s.masterReplID, strconv.Itoa(s.masterReplOffset))
+	status := fmt.Sprintf("FULLRESYNC %s %s", s.replID, strconv.Itoa(s.replOffset))
 	return conn.WriteStatus([]byte(status))
 }
 
-func (s *Server) replicate() {
+func (s *Server) asReplica() {
 	c, err := net.Dial(s.network, s.masterAddr)
 	if err != nil {
-		fmt.Println("slave connect to master failed: ", err.Error())
+		fmt.Println("replica connect to master error: ", err.Error())
 		return
 	}
 	defer c.Close()
 
 	conn := NewConn(c)
 	if err = s.handshake(conn); err != nil {
-		fmt.Println("slave handshake with master failed: ", err.Error())
+		fmt.Println("replica handshake with master error: ", err.Error())
 		return
 	}
 

@@ -14,7 +14,7 @@ type Config struct {
 	network    string
 	port       string
 	addr       string
-	isSlave    bool
+	role       role
 	masterAddr string
 }
 
@@ -24,9 +24,8 @@ func NewConfig(args []string) *Config {
 		arg := strings.ToLower(args[i])
 		if strings.HasSuffix(arg, port) && i+1 < len(args) {
 			conf.port = strings.ToLower(args[i+1])
-		}
-		if strings.HasSuffix(arg, replicaof) && i+2 < len(args) {
-			conf.isSlave = true
+		} else if strings.HasSuffix(arg, replicaof) && i+2 < len(args) {
+			conf.role = roleReplica
 			conf.masterAddr = fmt.Sprintf("%s:%s", strings.ToLower(args[i+1]), strings.ToLower(args[i+2]))
 		}
 	}
@@ -38,7 +37,7 @@ func NewConfig(args []string) *Config {
 	}
 	conf.addr = fmt.Sprintf("0.0.0.0:%s", conf.port)
 	if conf.masterAddr == "" {
-		conf.isSlave = false
+		conf.role = roleMaster
 	}
 	return conf
 }
