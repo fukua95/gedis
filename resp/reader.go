@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	ErrInvalidReply = errors.New("invalid reply")
+	ErrInvalidReply = errors.New("resp wrong reply")
 )
 
 type Reader struct {

@@ -242,7 +242,7 @@ func (s *Server) WriteCmdAndCheckReply(conn *Conn, cmd Command, reply string) er
 	if err != nil {
 		return err
 	}
-	if strings.EqualFold(v, reply) {
+	if !strings.EqualFold(v, reply) {
 		return resp.ErrInvalidReply
 	}
 	return nil
