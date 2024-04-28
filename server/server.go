@@ -16,7 +16,7 @@ type role string
 
 const (
 	roleMaster  role = "master"
-	roleReplica role = "replica"
+	roleReplica role = "slave"
 )
 
 type Server struct {
