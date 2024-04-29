@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -103,6 +104,10 @@ func (s *Server) handleConn(c net.Conn) {
 			err = conn.WriteString("PONG")
 		case resp.CmdSet:
 			err = s.set(conn, cmd)
+			if err != nil {
+				conn.WriteErrorInvalidCmd()
+			}
+			conn.WriteStatusOK()
 		case resp.CmdGet:
 			err = s.get(conn, cmd)
 		case resp.CmdInfo:
@@ -119,10 +124,10 @@ func (s *Server) handleConn(c net.Conn) {
 	}
 }
 
-func (s *Server) set(conn *Conn, cmd Command) error {
+func (s *Server) set(_ *Conn, cmd Command) error {
 	args := cmd.Args()
 	if len(args) < 3 {
-		return conn.WriteErrorInvalidCmd()
+		return errors.New("invalid command")
 	}
 	px, hasPx := cmd.SearchOption(resp.OptionSetEx)
 	ex := 0
@@ -139,7 +144,7 @@ func (s *Server) set(conn *Conn, cmd Command) error {
 	s.store.Put(args[1], args[2], int64(ex))
 	s.propagate(cmd)
 
-	return conn.WriteStatusOK()
+	return nil
 }
 
 func (s *Server) get(conn *Conn, cmd Command) error {
@@ -190,12 +195,16 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 	if err := conn.WriteRdb([]byte(EmptyRdb())); err != nil {
 		return err
 	}
+	fmt.Println("master finishes sending rdb file")
+
 	s.replicas.Append(conn)
 	return nil
 }
 
 func (s *Server) propagate(cmd Command) {
-	s.propCh <- cmd
+	if s.role == roleMaster {
+		s.propCh <- cmd
+	}
 }
 
 func (s *Server) asMaster() {
@@ -225,6 +234,19 @@ func (s *Server) asReplica() {
 	if err = s.requestFullResync(conn); err != nil {
 		fmt.Println("replica full resynchronization error: ", err.Error())
 		return
+	}
+
+	for {
+		cmd, err := conn.ReadCommand()
+		if err != nil {
+			fmt.Println("Error reading from master: ", err.Error())
+			break
+		}
+		// master -> replica, replica 不需要回复.
+		switch cmd.Name() {
+		case resp.CmdSet:
+			s.set(conn, cmd)
+		}
 	}
 }
 
@@ -262,10 +284,20 @@ func (s *Server) requestFullResync(conn *Conn) error {
 	// replica sens a `PSYNC ? -1` to tell the master that it doesn't have any data,
 	// and needs to be full resynchronized.
 	cmd := &command{args: [][]byte{[]byte(resp.CmdPsync), []byte("?"), []byte("-1")}}
-	if err := s.WriteCmdAndCheckReply(conn, cmd, resp.ReplyFullResync); err != nil {
+	if err := conn.WriteCommand(cmd); err != nil {
 		return err
 	}
-	_, err := conn.ReadBytesReply()
+	reply, err := conn.ReadStatusReply()
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(reply, resp.ReplyFullResync) {
+		return resp.ErrInvalidReply
+	}
+
+	// read the rdb file from the master, and apply the rdb file.
+	_, err = conn.ReadBytesReply()
+	fmt.Println("replica finishes receiving rdb file")
 	return err
 }
 
