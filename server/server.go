@@ -296,7 +296,7 @@ func (s *Server) requestFullResync(conn *Conn) error {
 	}
 
 	// read the rdb file from the master, and apply the rdb file.
-	_, err = conn.ReadBytesReply()
+	_, err = conn.ReadRdb()
 	fmt.Println("replica finishes receiving rdb file")
 	return err
 }

@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	ErrInvalidReply = errors.New("resp wrong reply")
+	ErrInvalidCommand = errors.New("resp invalid command")
+	ErrInvalidReply   = errors.New("resp wrong reply")
 )
 
 type Reader struct {
@@ -143,6 +144,27 @@ func (r *Reader) ReadString() (string, error) {
 		return r.readStringContent(line)
 	}
 	return "", fmt.Errorf("redis: can't parse reply=%.100q reading string", line)
+}
+
+func (r *Reader) ReadRdb() ([]byte, error) {
+	line, err := r.readLine()
+	if err != nil {
+		return nil, err
+	}
+	if line[0] != RespString {
+		return nil, ErrInvalidCommand
+	}
+	n, err := parseLen(line)
+	if err != nil {
+		return nil, err
+	}
+
+	b := make([]byte, n)
+	if _, err = io.ReadFull(r.rd, b); err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }
 
 func (r *Reader) ReadSlice() ([][]byte, error) {

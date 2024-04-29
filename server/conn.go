@@ -38,9 +38,9 @@ func (conn *Conn) ReadStatusReply() (string, error) {
 	return v.(string), nil
 }
 
-func (conn *Conn) ReadBytesReply() ([]byte, error) {
-	s, err := conn.r.ReadString()
-	return []byte(s), err
+func (conn *Conn) ReadRdb() ([]byte, error) {
+	s, err := conn.r.ReadRdb()
+	return s, err
 }
 
 func (conn *Conn) WriteCommand(cmd Command) error {
