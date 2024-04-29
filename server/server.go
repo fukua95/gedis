@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
 	"github.com/codecrafters-io/redis-starter-go/storage"
@@ -25,11 +26,16 @@ type Server struct {
 	addr    string
 	store   *storage.Store
 
-	role role
-
-	// for master
+	role       role
 	replID     string
 	replOffset int
+	propCh     chan Command
+
+	// sync write cmd to store and propagate to replicas.
+	mu sync.Mutex
+
+	// for master
+	replicas *storage.SyncSlice[*Conn]
 
 	// for replica
 	masterAddr string
@@ -46,8 +52,10 @@ func NewServer(conf *Config) *Server {
 	if s.role == roleMaster {
 		s.replID = util.RandomAlphanumericString(40)
 		s.replOffset = 0
-	}
-	if s.role == roleReplica {
+		s.propCh = make(chan Command, 10)
+		s.replicas = new(storage.SyncSlice[*Conn])
+		go s.asMaster()
+	} else {
 		s.masterAddr = conf.masterAddr
 		go s.asReplica()
 	}
@@ -116,11 +124,21 @@ func (s *Server) set(conn *Conn, cmd Command) error {
 	if len(args) < 3 {
 		return conn.WriteErrorInvalidCmd()
 	}
-	if px, ok := cmd.SearchOption(resp.OptionSetEx); ok {
-		s.store.PutEx(args[1], args[2], px)
-	} else {
-		s.store.Put(args[1], args[2])
+	px, hasPx := cmd.SearchOption(resp.OptionSetEx)
+	ex := 0
+	var err error
+	if hasPx {
+		if ex, err = util.Atoi(px); err != nil {
+			return err
+		}
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.store.Put(args[1], args[2], int64(ex))
+	s.propagate(cmd)
+
 	return conn.WriteStatusOK()
 }
 
@@ -129,6 +147,10 @@ func (s *Server) get(conn *Conn, cmd Command) error {
 	if len(args) < 2 {
 		return conn.WriteErrorInvalidCmd()
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	val, ok := s.store.Get(args[1])
 	if !ok {
 		return conn.WriteNilBulkString()
@@ -168,7 +190,21 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 	if err := conn.WriteRdb([]byte(EmptyRdb())); err != nil {
 		return err
 	}
+	s.replicas.Append(conn)
 	return nil
+}
+
+func (s *Server) propagate(cmd Command) {
+	s.propCh <- cmd
+}
+
+func (s *Server) asMaster() {
+	for cmd := range s.propCh {
+		replicas := s.replicas.Data()
+		for _, replica := range replicas {
+			replica.WriteCommand(cmd)
+		}
+	}
 }
 
 func (s *Server) asReplica() {
