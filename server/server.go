@@ -86,7 +86,12 @@ func (s *Server) ListenAndServe() error {
 
 func (s *Server) handleConn(c net.Conn) {
 	conn := NewConn(c)
-	defer conn.Close()
+	isReplica := false
+	defer func() {
+		if !isReplica {
+			conn.Close()
+		}
+	}()
 
 	for {
 		cmd, err := conn.ReadCommand()
@@ -117,12 +122,16 @@ func (s *Server) handleConn(c net.Conn) {
 			err = s.replconf(conn, cmd)
 		case resp.CmdPsync:
 			err = s.psync(conn, cmd)
+			isReplica = true
 		case resp.CmdWait:
 			err = s.wait(conn, cmd)
 		}
 		if err != nil {
 			fmt.Println("Error handle command: ", err.Error())
 			return
+		}
+		if isReplica {
+			break
 		}
 	}
 }
