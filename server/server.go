@@ -266,7 +266,7 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 		}(replica, isSync, s.replOffset, getAckCmd)
 	}
 
-	afterCh := time.After(time.Duration(time.Now().UnixMilli() + int64(timeout)))
+	afterCh := time.After(time.Duration(timeout) * time.Millisecond)
 	for syncCount < threshold && replyCount < len(replicas) && !hasTimeout {
 		select {
 		case sync := <-isSync:
@@ -276,7 +276,7 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 			hasTimeout = true
 		}
 	}
-	fmt.Printf("master get ack count=%v, reply count=%v, timeout=%v", syncCount, replyCount, hasTimeout)
+	fmt.Printf("master get ack count=%v, reply count=%v, timeout=%v\n", syncCount, replyCount, hasTimeout)
 
 	s.replOffset += getAckCmd.RespLen()
 
