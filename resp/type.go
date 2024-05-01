@@ -19,17 +19,15 @@ const (
 	RespPush      = '>' // ><len>\r\n
 )
 
-// TODO: 统一改为全大写, 因为 client 用大写.
-
 const (
-	CmdSet      = "set"
-	CmdGet      = "get"
-	CmdPing     = "ping"
-	CmdEcho     = "echo"
-	CmdInfo     = "info"
-	CmdReplConf = "replconf"
-	CmdPsync    = "psync"
-	CmdWait     = "wait"
+	CmdSet      = "SET"
+	CmdGet      = "GET"
+	CmdPing     = "PING"
+	CmdEcho     = "ECHO"
+	CmdInfo     = "INFO"
+	CmdReplConf = "REPLCONF"
+	CmdPsync    = "PSYNC"
+	CmdWait     = "WAIT"
 )
 
 const (
@@ -42,7 +40,6 @@ const (
 )
 
 const (
-	// client 对大小写敏感, 需要全大写.
 	ReplyFullResync = "FULLRESYNC"
 )
 

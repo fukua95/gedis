@@ -254,7 +254,7 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 				return
 			}
 			if len(reply) != 3 || string(reply[0]) != resp.CmdReplConf || string(reply[1]) != resp.OptionAck {
-				fmt.Println("master get ack error: read/write error")
+				fmt.Println("master getack reply error: ", string(reply[0]), string(reply[1]), len(reply))
 				isSync <- 0
 				return
 			}
@@ -325,7 +325,7 @@ func (s *Server) asReplica() {
 			fmt.Println("Error reading from master: ", err.Error())
 			break
 		}
-		// master -> replica, replica 不需要回复.
+		// master -> replica, replica 只回复 REPLCONF, 其余 cmd 不回复.
 		switch cmd.Name() {
 		case resp.CmdSet:
 			s.set(conn, cmd)

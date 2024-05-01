@@ -34,7 +34,7 @@ func (cmd *command) Name() string {
 	if len(cmd.args) == 0 {
 		return ""
 	}
-	return strings.ToLower(string(cmd.At(0)))
+	return strings.ToUpper(string(cmd.At(0)))
 }
 
 func (cmd *command) Args() [][]byte {
