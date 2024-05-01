@@ -222,61 +222,61 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 		return resp.ErrInvalidCommand
 	}
 	threshold, _ := util.Atoi(cmd.At(1))
-	timeout, _ := util.Atoi(cmd.At(2))
+	timeoutMS, _ := util.Atoi(cmd.At(2))
 
 	if s.replOffset == 0 {
 		return conn.WriteInt(s.replicas.Len())
 	}
 
-	if threshold <= 0 || timeout <= 0 {
+	if threshold <= 0 || timeoutMS <= 0 {
 		return conn.WriteInt(0)
 	}
 
 	replicas := s.replicas.Clone()
-	isSync := make(chan int, len(replicas))
-	replyCount := 0
+	isSync := make(chan int, len(replicas)+1)
 	syncCount := 0
-	hasTimeout := false
 	getAckCmd := &command{args: [][]byte{[]byte(resp.CmdReplConf), []byte(resp.OptionGetAck), []byte("*")}}
+	timeout := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
 
 	for _, replica := range replicas {
-		go func(conn *Conn, isSync chan<- int, offset int, cmd *command) {
-			err := conn.WriteCommand(cmd)
-			if err != nil {
-				fmt.Println("master send getack error: ", err.Error())
-				isSync <- 0
-				return
-			}
-			reply, err := conn.ReadSliceReply()
-			if err != nil {
-				fmt.Println("master get ack error: ", err.Error())
-				isSync <- 0
-				return
-			}
-			if len(reply) != 3 || string(reply[0]) != resp.CmdReplConf || string(reply[1]) != resp.OptionAck {
-				fmt.Println("master getack reply error: ", string(reply[0]), string(reply[1]), len(reply))
-				isSync <- 0
-				return
-			}
-			replicaOffset, _ := util.Atoi(reply[2])
-			if replicaOffset < offset {
-				isSync <- 0
-			}
-			isSync <- 1
-		}(replica, isSync, s.replOffset, getAckCmd)
+		go func(conn *Conn, isSync chan<- int, offset int, cmd *command, timeout time.Time) {
+			isSync <- func() int {
+				defer conn.ResetReadDeadline()
+
+				err := conn.WriteCommand(cmd)
+				if err != nil {
+					fmt.Println("master send getack error: ", err.Error())
+					return 0
+				}
+				conn.SetReadDeadline(timeout)
+				reply, err := conn.ReadSliceReply()
+				if err != nil {
+					fmt.Println("master getack reply error: ", err.Error())
+					return 0
+				}
+
+				if len(reply) != 3 || string(reply[0]) != resp.CmdReplConf || string(reply[1]) != resp.OptionAck {
+					fmt.Println("master getack reply error: invalid reply")
+					return 0
+				}
+
+				replicaOffset, _ := util.Atoi(reply[2])
+				if replicaOffset < offset {
+					fmt.Printf("master offset=%v, replica offset=%v\n", offset, replicaOffset)
+					return 0
+				}
+
+				fmt.Println("master getack from one replica successfully, offset=", offset)
+				return 1
+			}()
+		}(replica, isSync, s.replOffset, getAckCmd, timeout)
 	}
 
-	afterCh := time.After(time.Duration(timeout) * time.Millisecond)
-	for syncCount < threshold && replyCount < len(replicas) && !hasTimeout {
-		select {
-		case sync := <-isSync:
-			syncCount += sync
-			replyCount++
-		case <-afterCh:
-			hasTimeout = true
-		}
+	for i := 0; i < len(replicas); i++ {
+		syncCount += <-isSync
 	}
-	fmt.Printf("master get ack count=%v, reply count=%v, timeout=%v\n", syncCount, replyCount, hasTimeout)
+
+	fmt.Println("master getack count=", syncCount)
 
 	s.replOffset += getAckCmd.RespLen()
 

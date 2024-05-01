@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
 )
@@ -19,6 +20,14 @@ func NewConn(conn net.Conn) *Conn {
 		r:       resp.NewReader(conn),
 		w:       resp.NewWriter(conn),
 	}
+}
+
+func (conn *Conn) SetReadDeadline(t time.Time) {
+	conn.netConn.SetDeadline(t)
+}
+
+func (conn *Conn) ResetReadDeadline() {
+	conn.netConn.SetDeadline(time.Time{})
 }
 
 func (conn *Conn) ReadCommand() (Command, error) {
