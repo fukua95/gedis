@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
 	"github.com/codecrafters-io/redis-starter-go/storage"
@@ -30,13 +31,13 @@ type Server struct {
 	role       role
 	replID     string
 	replOffset int
-	propCh     chan Command
 
 	// sync write cmd to store and propagate to replicas.
 	mu sync.Mutex
 
 	// for master
 	replicas *storage.SyncSlice[*Conn]
+	propCh   chan Command
 
 	// for replica
 	masterAddr string
@@ -93,7 +94,7 @@ func (s *Server) handleConn(c net.Conn) {
 			return
 		}
 		if err != nil {
-			fmt.Println("Error reading from conn: ", err.Error())
+			fmt.Printf("role=%s Error reading from conn: %q\n", s.role, err.Error())
 			return
 		}
 
@@ -116,6 +117,8 @@ func (s *Server) handleConn(c net.Conn) {
 			err = s.replconf(conn, cmd)
 		case resp.CmdPsync:
 			err = s.psync(conn, cmd)
+		case resp.CmdWait:
+			err = s.wait(conn, cmd)
 		}
 		if err != nil {
 			fmt.Println("Error handle command: ", err.Error())
@@ -187,7 +190,7 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 	// repl_id != ? 时, 检查 master's repl_id = repl_id.
 	// offset = -1, 表示从头开始同步: 发送 rdb file + 后续同步.
 	// 这里是 `psync ? -1`, 所以先忽略相关逻辑.
-	status := fmt.Sprintf("%s %s %s", resp.ReplyFullResync, s.replID, strconv.Itoa(s.replOffset))
+	status := fmt.Sprintf("%s %s %s", resp.ReplyFullResync, s.replID, strconv.Itoa(int(s.replOffset)))
 	if err := conn.WriteStatus([]byte(status)); err != nil {
 		return err
 	}
@@ -201,15 +204,86 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 	return nil
 }
 
+// `wait` waits until:
+// - the expected number of replicas complete sync with master,
+// - or timeout expires.
+// `wait` should return the number of replicas that sync with master, even if the timeout expires.
+func (s *Server) wait(conn *Conn, cmd Command) error {
+	if len(cmd.Args()) != 3 {
+		return resp.ErrInvalidCommand
+	}
+	threshold, _ := util.Atoi(cmd.At(1))
+	timeout, _ := util.Atoi(cmd.At(2))
+
+	if s.replOffset == 0 {
+		return conn.WriteInt(s.replicas.Len())
+	}
+
+	if threshold <= 0 || timeout <= 0 {
+		return conn.WriteInt(0)
+	}
+
+	replicas := s.replicas.Clone()
+	isSync := make(chan int, len(replicas))
+	replyCount := 0
+	syncCount := 0
+	hasTimeout := false
+	getAckCmd := &command{args: [][]byte{[]byte(resp.CmdReplConf), []byte(resp.OptionGetAck), []byte("*")}}
+
+	for _, replica := range replicas {
+		go func(conn *Conn, isSync chan<- int, offset int, cmd *command) {
+			err := conn.WriteCommand(cmd)
+			if err != nil {
+				fmt.Println("master send getack error: ", err.Error())
+				isSync <- 0
+				return
+			}
+			reply, err := conn.ReadSliceReply()
+			if err != nil {
+				fmt.Println("master get ack error: ", err.Error())
+				isSync <- 0
+				return
+			}
+			if len(reply) != 3 || string(reply[0]) != resp.CmdReplConf || string(reply[1]) != resp.OptionAck {
+				fmt.Println("master get ack error: read/write error")
+				isSync <- 0
+				return
+			}
+			replicaOffset, _ := util.Atoi(reply[2])
+			if replicaOffset < offset {
+				isSync <- 0
+			}
+			isSync <- 1
+		}(replica, isSync, s.replOffset, getAckCmd)
+	}
+
+	afterCh := time.After(time.Duration(time.Now().UnixMilli() + int64(timeout)))
+	for syncCount < threshold && replyCount < len(replicas) && !hasTimeout {
+		select {
+		case sync := <-isSync:
+			syncCount += sync
+			replyCount++
+		case <-afterCh:
+			hasTimeout = true
+		}
+	}
+	fmt.Printf("master get ack count=%v, reply count=%v, timeout=%v", syncCount, replyCount, hasTimeout)
+
+	s.replOffset += getAckCmd.RespLen()
+
+	return conn.WriteInt(syncCount)
+}
+
 func (s *Server) propagate(cmd Command) {
 	if s.role == roleMaster {
 		s.propCh <- cmd
+		s.replOffset += cmd.RespLen()
 	}
 }
 
 func (s *Server) asMaster() {
 	for cmd := range s.propCh {
-		replicas := s.replicas.Data()
+		replicas := s.replicas.Clone()
 		for _, replica := range replicas {
 			replica.WriteCommand(cmd)
 		}
@@ -222,9 +296,9 @@ func (s *Server) asReplica() {
 		fmt.Println("replica connect to master error: ", err.Error())
 		return
 	}
-	defer c.Close()
 
 	conn := NewConn(c)
+	defer conn.Close()
 
 	if err = s.handshake(conn); err != nil {
 		fmt.Println("replica handshake with master error: ", err.Error())
@@ -246,7 +320,21 @@ func (s *Server) asReplica() {
 		switch cmd.Name() {
 		case resp.CmdSet:
 			s.set(conn, cmd)
+		case resp.CmdReplConf:
+			if len(cmd.Args()) != 3 || string(cmd.At(1)) != resp.OptionGetAck {
+				fmt.Println("Error reading from master: invalid REPLCONF command")
+				conn.WriteErrorInvalidCmd()
+				return
+			}
+			fmt.Println("replica receives GETACK command from master")
+			reply := [][]byte{[]byte(resp.CmdReplConf), []byte("ACK"), util.Itoa(s.replOffset)}
+			if err := conn.WriteSlice(reply); err != nil {
+				fmt.Println("replica reply GETACK error: ", err.Error())
+			} else {
+				fmt.Println("replica reply GETACK successfully")
+			}
 		}
+		s.replOffset += cmd.RespLen()
 	}
 }
 
@@ -287,13 +375,16 @@ func (s *Server) requestFullResync(conn *Conn) error {
 	if err := conn.WriteCommand(cmd); err != nil {
 		return err
 	}
-	reply, err := conn.ReadStatusReply()
+	replyStr, err := conn.ReadStatusReply()
 	if err != nil {
 		return err
 	}
-	if !strings.HasPrefix(reply, resp.ReplyFullResync) {
+	reply := strings.Split(replyStr, " ")
+	if len(reply) != 3 || reply[0] != resp.ReplyFullResync {
 		return resp.ErrInvalidReply
 	}
+	s.replID = reply[1]
+	s.replOffset, _ = strconv.Atoi(reply[2])
 
 	// read the rdb file from the master, and apply the rdb file.
 	_, err = conn.ReadRdb()

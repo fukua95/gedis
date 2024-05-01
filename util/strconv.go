@@ -9,8 +9,8 @@ func Atoi(b []byte) (int, error) {
 	return strconv.Atoi(string(b))
 }
 
-func Itoa(v int) []byte {
-	return []byte(strconv.Itoa(v))
+func Itoa[T int | int64](v T) []byte {
+	return []byte(strconv.Itoa(int(v)))
 }
 
 func BytesToLower(b []byte) []byte {

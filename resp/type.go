@@ -19,6 +19,8 @@ const (
 	RespPush      = '>' // ><len>\r\n
 )
 
+// TODO: 统一改为全大写, 因为 client 用大写.
+
 const (
 	CmdSet      = "set"
 	CmdGet      = "get"
@@ -27,6 +29,7 @@ const (
 	CmdInfo     = "info"
 	CmdReplConf = "replconf"
 	CmdPsync    = "psync"
+	CmdWait     = "wait"
 )
 
 const (
@@ -34,6 +37,8 @@ const (
 	OptionInfoRep   = "replication"
 	OptionReplLPort = "listening-port"
 	OptionReplCapa  = "capa"
+	OptionGetAck    = "GETACK"
+	OptionAck       = "ACK"
 )
 
 const (

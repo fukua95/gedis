@@ -64,6 +64,12 @@ func (w *Writer) WriteRdb(content []byte) error {
 	return err
 }
 
+func (w *Writer) WriteInt(v int) error {
+	line := fmt.Sprintf("%c%s\r\n", RespInt, util.Itoa(v))
+	_, err := w.w.Write([]byte(line))
+	return err
+}
+
 /*
 func (w *Writer) writeEnd() error {
 	err := w.w.WriteByte('\r')

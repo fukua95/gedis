@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
@@ -36,6 +37,10 @@ func (conn *Conn) ReadStatusReply() (string, error) {
 		return "", err
 	}
 	return v.(string), nil
+}
+
+func (conn *Conn) ReadSliceReply() ([][]byte, error) {
+	return conn.r.ReadSlice()
 }
 
 func (conn *Conn) ReadRdb() ([]byte, error) {
@@ -86,6 +91,13 @@ func (conn *Conn) WriteRdb(content []byte) error {
 	return conn.w.Flush()
 }
 
+func (conn *Conn) WriteInt(v int) error {
+	if err := conn.w.WriteInt(v); err != nil {
+		return err
+	}
+	return conn.w.Flush()
+}
+
 func (conn *Conn) WriteErrorInvalidCmd() error {
 	if err := conn.w.WriteError([]byte("Invalid Command")); err != nil {
 		return err
@@ -101,5 +113,6 @@ func (conn *Conn) Close() error {
 	if err := conn.w.Flush(); err != nil {
 		return err
 	}
+	fmt.Printf("closing connection: %v->%v\n", conn.netConn.LocalAddr(), conn.netConn.RemoteAddr())
 	return conn.netConn.Close()
 }

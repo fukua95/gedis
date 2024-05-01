@@ -13,10 +13,16 @@ func (s *SyncSlice[T]) Append(v T) {
 	s.s = append(s.s, v)
 }
 
-func (s *SyncSlice[T]) Data() []T {
+func (s *SyncSlice[T]) Clone() []T {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	data := make([]T, len(s.s))
 	copy(data, s.s)
 	return data
+}
+
+func (s *SyncSlice[T]) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.s)
 }
