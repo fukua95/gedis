@@ -20,16 +20,16 @@ const (
 )
 
 const (
-	CmdSet       = "SET"
-	CmdGet       = "GET"
-	CmdPing      = "PING"
-	CmdEcho      = "ECHO"
-	CmdInfo      = "INFO"
-	CmdReplConf  = "REPLCONF"
-	CmdPsync     = "PSYNC"
-	CmdWait      = "WAIT"
-	CmdConfigGet = "CONFIG GET"
-	CmdKeys      = "KEYS"
+	CmdSet      = "SET"
+	CmdGet      = "GET"
+	CmdPing     = "PING"
+	CmdEcho     = "ECHO"
+	CmdInfo     = "INFO"
+	CmdReplConf = "REPLCONF"
+	CmdPsync    = "PSYNC"
+	CmdWait     = "WAIT"
+	CmdConfig   = "CONFIG"
+	CmdKeys     = "KEYS"
 )
 
 const (

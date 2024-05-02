@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/rdb"
 	"github.com/codecrafters-io/redis-starter-go/resp"
 	"github.com/codecrafters-io/redis-starter-go/storage"
 	"github.com/codecrafters-io/redis-starter-go/util"
@@ -23,10 +25,12 @@ const (
 )
 
 type Server struct {
-	network string
-	port    string
-	addr    string
-	store   *storage.Store
+	network    string
+	port       string
+	addr       string
+	store      *storage.Store
+	dir        string
+	dbfilename string
 
 	role       role
 	replID     string
@@ -45,12 +49,17 @@ type Server struct {
 
 func NewServer(conf *Config) *Server {
 	s := &Server{
-		network: conf.network,
-		port:    conf.port,
-		addr:    conf.addr,
-		store:   storage.NewStore(),
-		role:    conf.role,
+		network:    conf.network,
+		port:       conf.port,
+		addr:       conf.addr,
+		store:      storage.NewStore(),
+		dir:        conf.dir,
+		dbfilename: conf.dbfilename,
+		role:       conf.role,
 	}
+
+	s.loadRdb()
+
 	if s.role == roleMaster {
 		s.replID = util.RandomAlphanumericString(40)
 		s.replOffset = 0
@@ -62,6 +71,31 @@ func NewServer(conf *Config) *Server {
 		go s.asReplica()
 	}
 	return s
+}
+
+func (s *Server) loadRdb() {
+	if s.dir == "" || s.dbfilename == "" {
+		return
+	}
+
+	db := fmt.Sprintf("%s/%s", s.dir, s.dbfilename)
+	f, err := os.Open(db)
+	if err != nil {
+		fmt.Printf("read file %s error %s\n", db, err.Error())
+		return
+	}
+
+	// kvCh := make(chan rdb.Entry, 100)
+	kvCh := make(chan rdb.Entry, 100)
+	rdb := rdb.NewRdb(f)
+	go rdb.Read(kvCh)
+
+	for kv := range kvCh {
+		s.store.Put([]byte(kv.K), []byte(kv.V), int64(kv.Ex))
+	}
+
+	f.Close()
+	fmt.Println("server successfully loaded rdb")
 }
 
 func (s *Server) ListenAndServe() error {
@@ -125,6 +159,10 @@ func (s *Server) handleConn(c net.Conn) {
 			isReplica = true
 		case resp.CmdWait:
 			err = s.wait(conn, cmd)
+		case resp.CmdConfig:
+			err = s.config(conn, cmd)
+		case resp.CmdKeys:
+			err = s.keys(conn, cmd)
 		}
 		if err != nil {
 			fmt.Println("Error handle command: ", err.Error())
@@ -148,6 +186,7 @@ func (s *Server) set(_ *Conn, cmd Command) error {
 		if ex, err = util.Atoi(px); err != nil {
 			return err
 		}
+		ex += int(time.Now().UnixMilli())
 	}
 
 	s.mu.Lock()
@@ -200,11 +239,11 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 	// offset = -1, 表示从头开始同步: 发送 rdb file + 后续同步.
 	// 这里是 `psync ? -1`, 所以先忽略相关逻辑.
 	status := fmt.Sprintf("%s %s %s", resp.ReplyFullResync, s.replID, strconv.Itoa(int(s.replOffset)))
-	if err := conn.WriteStatus([]byte(status)); err != nil {
+	if err := conn.WriteStatus(status); err != nil {
 		return err
 	}
 	// send a rdb file.
-	if err := conn.WriteRdb([]byte(EmptyRdb())); err != nil {
+	if err := conn.WriteRdb([]byte(rdb.EmptyRdb())); err != nil {
 		return err
 	}
 	fmt.Println("master finishes sending rdb file")
@@ -281,6 +320,28 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 	s.replOffset += getAckCmd.RespLen()
 
 	return conn.WriteInt(syncCount)
+}
+
+func (s *Server) config(conn *Conn, cmd Command) error {
+	var reply [][]byte
+	switch string(cmd.At(2)) {
+	case resp.OptionDir:
+		reply = [][]byte{[]byte(resp.OptionDir), []byte(s.dir)}
+	case resp.OptionDBFile:
+		reply = [][]byte{[]byte(resp.OptionDBFile), []byte(s.dbfilename)}
+	}
+	return conn.WriteSlice(reply)
+}
+
+func (s *Server) keys(conn *Conn, _ Command) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := s.store.Scan()
+	strKeys := make([][]byte, len(keys))
+	for i, k := range keys {
+		strKeys[i] = []byte(k)
+	}
+	return conn.WriteSlice(strKeys)
 }
 
 func (s *Server) propagate(cmd Command) {
