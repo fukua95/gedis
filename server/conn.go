@@ -61,7 +61,7 @@ func (conn *Conn) WriteCommand(cmd Command) error {
 	return conn.WriteSlice(cmd.Args())
 }
 
-func (conn *Conn) WriteStatus(b []byte) error {
+func (conn *Conn) WriteStatus(b string) error {
 	if err := conn.w.WriteStatus(b); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (conn *Conn) WriteStatus(b []byte) error {
 }
 
 func (conn *Conn) WriteStatusOK() error {
-	return conn.WriteStatus([]byte("OK"))
+	return conn.WriteStatus("OK")
 }
 
 func (conn *Conn) WriteString(s string) error {
@@ -108,7 +108,7 @@ func (conn *Conn) WriteInt(v int) error {
 }
 
 func (conn *Conn) WriteErrorInvalidCmd() error {
-	if err := conn.w.WriteError([]byte("Invalid Command")); err != nil {
+	if err := conn.w.WriteError("Invalid Command"); err != nil {
 		return err
 	}
 	return conn.w.Flush()

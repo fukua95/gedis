@@ -2,12 +2,10 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/resp"
-	"github.com/codecrafters-io/redis-starter-go/util"
 )
 
 var (
@@ -81,9 +79,9 @@ func (cmd *command) SetResult(r interface{}) {
 func (cmd *command) RespLen() int {
 	args := cmd.args
 	l := 0
-	l += len(fmt.Sprintf("%c%s\r\n", resp.RespArray, util.Itoa(len(args))))
+	l += len(resp.ArrayHeader(len(args)))
 	for _, b := range args {
-		l += len(fmt.Sprintf("%c%s\r\n%s\r\n", resp.RespString, util.Itoa(len(b)), b))
+		l += len(resp.String(string(b)))
 	}
 	return l
 }

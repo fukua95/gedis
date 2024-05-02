@@ -2,10 +2,7 @@ package resp
 
 import (
 	"bufio"
-	"fmt"
 	"io"
-
-	"github.com/codecrafters-io/redis-starter-go/util"
 )
 
 type Writer struct {
@@ -18,33 +15,28 @@ func NewWriter(w io.Writer) *Writer {
 	}
 }
 
-func (w *Writer) WriteStatus(b []byte) error {
-	line := fmt.Sprintf("%c%s\r\n", RespStatus, b)
-	_, err := w.w.Write([]byte(line))
+func (w *Writer) WriteStatus(b string) error {
+	_, err := w.w.Write(Status(b))
 	return err
 }
 
-func (w *Writer) WriteError(e []byte) error {
-	line := fmt.Sprintf("%cERR %s\r\n", RespError, e)
-	_, err := w.w.Write([]byte(line))
+func (w *Writer) WriteError(e string) error {
+	_, err := w.w.Write(Error(e))
 	return err
 }
 
 func (w *Writer) WriteNilBulkString() error {
-	line := fmt.Sprintf("%c-1\r\n", RespString)
-	_, err := w.w.Write([]byte(line))
+	_, err := w.w.Write(NilString())
 	return err
 }
 
 func (w *Writer) WriteBytes(b []byte) error {
-	line := fmt.Sprintf("%c%s\r\n%s\r\n", RespString, util.Itoa(len(b)), b)
-	_, err := w.w.Write([]byte(line))
+	_, err := w.w.Write(String(string(b)))
 	return err
 }
 
 func (w *Writer) WriteSlice(arr [][]byte) error {
-	line := fmt.Sprintf("%c%s\r\n", RespArray, util.Itoa(len(arr)))
-	_, err := w.w.Write([]byte(line))
+	_, err := w.w.Write(ArrayHeader(len(arr)))
 	if err != nil {
 		return err
 	}
@@ -58,27 +50,14 @@ func (w *Writer) WriteSlice(arr [][]byte) error {
 }
 
 func (w *Writer) WriteRdb(content []byte) error {
-	// rdb 和 bulk string 的区别: 结尾没有 \r\n
-	line := fmt.Sprintf("%c%s\r\n%s", RespString, util.Itoa(len(content)), content)
-	_, err := w.w.Write([]byte(line))
+	_, err := w.w.Write(RdbContent(content))
 	return err
 }
 
 func (w *Writer) WriteInt(v int) error {
-	line := fmt.Sprintf("%c%s\r\n", RespInt, util.Itoa(v))
-	_, err := w.w.Write([]byte(line))
+	_, err := w.w.Write(Integer(v))
 	return err
 }
-
-/*
-func (w *Writer) writeEnd() error {
-	err := w.w.WriteByte('\r')
-	if err != nil {
-		return err
-	}
-	return w.w.WriteByte('\n')
-}
-*/
 
 func (w *Writer) Flush() error {
 	return w.w.Flush()
