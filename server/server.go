@@ -407,8 +407,8 @@ func (s *Server) xread(conn *Conn, cmd Command) error {
 	keys := make([]string, keyL)
 	starts := make([]string, keyL)
 	for i := 0; i < keyL; i++ {
-		keys = append(keys, string(cmd.At(i+keysPos)))
-		starts = append(starts, string(cmd.At(i+keysPos+keyL)))
+		keys[i] = string(cmd.At(i + keysPos))
+		starts[i] = string(cmd.At(i + keysPos + keyL))
 	}
 
 	for i, key := range keys {
