@@ -1,5 +1,7 @@
 package resp
 
+import "errors"
+
 // redis resp protocol data type.
 const (
 	RespStatus    = '+' // +<string>\r\n
@@ -30,32 +32,30 @@ const (
 	CmdWait     = "WAIT"
 	CmdConfig   = "CONFIG"
 	CmdKeys     = "KEYS"
+	CmdType     = "TYPE"
+	CmdXAdd     = "XADD"
+	CmdXRange   = "XRANGE"
+	CmdXRead    = "XREAD"
 )
 
 const (
-	OptionSetEx     = "px"
-	OptionInfoRep   = "replication"
-	OptionReplLPort = "listening-port"
-	OptionReplCapa  = "capa"
-	OptionGetAck    = "GETACK"
-	OptionAck       = "ACK"
-	OptionDir       = "dir"
-	OptionDBFile    = "dbfilename"
+	OptionSetEx          = "px"
+	OptionInfoRep        = "replication"
+	OptionReplLPort      = "listening-port"
+	OptionReplCapa       = "capa"
+	OptionGetAck         = "GETACK"
+	OptionAck            = "ACK"
+	OptionDir            = "dir"
+	OptionDBFile         = "dbfilename"
+	OptionBlock          = "block"
+	OptionStreamIDNewest = "$"
 )
 
 const (
 	ReplyFullResync = "FULLRESYNC"
 )
 
-/*
-var OptionArgMap = map[string]int{
-	OptionPsync: 2,
-}
-
-func OptionArgCount(op string) int {
-	if v, has := OptionArgMap[op]; has {
-		return v
-	}
-	return 1
-}
-*/
+var (
+	ErrStreamIDInvalid = errors.New("The ID specified in XADD is equal or smaller than the target stream top item")
+	ErrStreamIDIllegal = errors.New("The ID specified in XADD must be greater than 0-0")
+)

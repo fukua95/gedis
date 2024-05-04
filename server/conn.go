@@ -58,7 +58,11 @@ func (conn *Conn) ReadRdb() ([]byte, error) {
 }
 
 func (conn *Conn) WriteCommand(cmd Command) error {
-	return conn.WriteSlice(cmd.Args())
+	strs := make([]string, len(cmd.Args()))
+	for i := 0; i < len(cmd.Args()); i++ {
+		strs[i] = string(cmd.At(i))
+	}
+	return conn.WriteSlice(strs)
 }
 
 func (conn *Conn) WriteStatus(b string) error {
@@ -86,8 +90,12 @@ func (conn *Conn) WriteNilBulkString() error {
 	return conn.w.Flush()
 }
 
-func (conn *Conn) WriteSlice(a [][]byte) error {
-	if err := conn.w.WriteSlice(a); err != nil {
+func (conn *Conn) WriteSlice(a []string) error {
+	b := make([][]byte, len(a))
+	for i := 0; i < len(a); i++ {
+		b[i] = []byte(a[i])
+	}
+	if err := conn.w.WriteSlice(b); err != nil {
 		return err
 	}
 	return conn.w.Flush()
@@ -107,11 +115,22 @@ func (conn *Conn) WriteInt(v int) error {
 	return conn.w.Flush()
 }
 
-func (conn *Conn) WriteErrorInvalidCmd() error {
-	if err := conn.w.WriteError("Invalid Command"); err != nil {
+func (conn *Conn) WriteError(e string) error {
+	if err := conn.w.WriteError(e); err != nil {
 		return err
 	}
 	return conn.w.Flush()
+}
+
+func (conn *Conn) WriteErrorInvalidCmd() error {
+	return conn.WriteError("Invalid Command")
+}
+
+func (conn *Conn) WriteRawBytes(b []byte) error {
+	if err := conn.w.WriteRawBytes(b); err != nil {
+		return err
+	}
+	return conn.Flush()
 }
 
 func (conn *Conn) Flush() error {

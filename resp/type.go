@@ -14,6 +14,14 @@ func ArrayHeader(l int) []byte {
 	return []byte(fmt.Sprintf("%c%s\r\n", RespArray, util.Itoa(l)))
 }
 
+func Array(strs []string) []byte {
+	arr := ArrayHeader(len(strs))
+	for _, str := range strs {
+		arr = append(arr, String(str)...)
+	}
+	return arr
+}
+
 func Status(s string) []byte {
 	return []byte(fmt.Sprintf("%c%s\r\n", RespStatus, s))
 }

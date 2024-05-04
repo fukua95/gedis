@@ -91,7 +91,7 @@ func (s *Server) loadRdb() {
 	go rdb.Read(kvCh)
 
 	for kv := range kvCh {
-		s.store.Put([]byte(kv.K), []byte(kv.V), int64(kv.Ex))
+		s.store.Put(kv.K, kv.V, int64(kv.Ex))
 	}
 
 	f.Close()
@@ -163,6 +163,14 @@ func (s *Server) handleConn(c net.Conn) {
 			err = s.config(conn, cmd)
 		case resp.CmdKeys:
 			err = s.keys(conn, cmd)
+		case resp.CmdType:
+			err = s.dataType(conn, cmd)
+		case resp.CmdXAdd:
+			err = s.xadd(conn, cmd)
+		case resp.CmdXRange:
+			err = s.xrange(conn, cmd)
+		case resp.CmdXRead:
+			err = s.xread(conn, cmd)
 		}
 		if err != nil {
 			fmt.Println("Error handle command: ", err.Error())
@@ -192,7 +200,7 @@ func (s *Server) set(_ *Conn, cmd Command) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.store.Put(args[1], args[2], int64(ex))
+	s.store.Put(string(args[1]), string(args[2]), int64(ex))
 	s.propagate(cmd)
 
 	return nil
@@ -207,7 +215,7 @@ func (s *Server) get(conn *Conn, cmd Command) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	val, ok := s.store.Get(args[1])
+	val, ok := s.store.Get(string(args[1]))
 	if !ok {
 		return conn.WriteNilBulkString()
 	}
@@ -323,12 +331,12 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 }
 
 func (s *Server) config(conn *Conn, cmd Command) error {
-	var reply [][]byte
+	reply := []string{}
 	switch string(cmd.At(2)) {
 	case resp.OptionDir:
-		reply = [][]byte{[]byte(resp.OptionDir), []byte(s.dir)}
+		reply = []string{resp.OptionDir, s.dir}
 	case resp.OptionDBFile:
-		reply = [][]byte{[]byte(resp.OptionDBFile), []byte(s.dbfilename)}
+		reply = []string{resp.OptionDBFile, s.dbfilename}
 	}
 	return conn.WriteSlice(reply)
 }
@@ -337,11 +345,123 @@ func (s *Server) keys(conn *Conn, _ Command) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	keys := s.store.Scan()
-	strKeys := make([][]byte, len(keys))
+	reply := make([]string, len(keys))
 	for i, k := range keys {
-		strKeys[i] = []byte(k)
+		reply[i] = string(k)
 	}
-	return conn.WriteSlice(strKeys)
+	return conn.WriteSlice(reply)
+}
+
+func (s *Server) dataType(conn *Conn, cmd Command) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	vt := s.store.ValueType(string(cmd.At(1)))
+	return conn.WriteStatus(vt)
+}
+
+func (s *Server) xadd(conn *Conn, cmd Command) error {
+	key := string(cmd.At(1))
+	idStr := string(cmd.At(2))
+	pairs := make([]string, len(cmd.Args())-3)
+
+	fmt.Printf("xadd: key=%s, id=%s", key, idStr)
+	for i := 3; i < len(cmd.Args()); i++ {
+		arg := string(cmd.At(i))
+		pairs[i-3] = arg
+	}
+
+	id, err := s.store.AddStream(key, idStr, pairs)
+	if err != nil {
+		return conn.WriteError(err.Error())
+	}
+	fmt.Printf("xadd a stream key=%s, id=%s\n", key, id)
+	return conn.WriteString(id)
+}
+
+func (s *Server) xrange(conn *Conn, cmd Command) error {
+	key := string(cmd.At(1))
+	start := string(cmd.At(2))
+	if start == "-" {
+		start = storage.MinID.String()
+	}
+	end := string(cmd.At(3))
+	if end == "+" {
+		end = storage.MaxID.String()
+	}
+	entries := s.store.GetStream(key, start, end)
+
+	return conn.WriteRawBytes(s.StreamEntriesToResp(entries))
+}
+
+func (s *Server) xread(conn *Conn, cmd Command) error {
+	fmt.Println("xread: cmd=", cmd.Args())
+	keysPos, blockMS := 2, -1
+	if string(cmd.At(1)) == resp.OptionBlock {
+		blockMS, _ = util.Atoi(cmd.At(2))
+		keysPos = 4
+	}
+
+	keyL := (len(cmd.Args()) - keysPos) / 2
+	fmt.Printf("keys pos = %v, key len = %v, block = %vMS\n", keysPos, keyL, blockMS)
+
+	keys := make([]string, keyL)
+	starts := make([]string, keyL)
+	for i := 0; i < keyL; i++ {
+		keys = append(keys, string(cmd.At(i+keysPos)))
+		starts = append(starts, string(cmd.At(i+keysPos+keyL)))
+	}
+
+	for i, key := range keys {
+		key, start := key, starts[i]
+		fmt.Printf("key=%s, start=%s\n", key, start)
+		if start == resp.OptionStreamIDNewest {
+			starts[i] = s.store.StreamNewestID(key)
+		}
+	}
+
+	xreadData := func() ([]byte, bool) {
+		hasData := false
+		b := resp.ArrayHeader(len(keys))
+		for i, key := range keys {
+			key, start := string(key), string(starts[i])
+
+			entries := s.store.GetStream(key, start, storage.MaxID.String())
+			if len(entries) > 0 && entries[0].ID.String() == start {
+				entries = entries[1:]
+			}
+			if len(entries) > 0 {
+				hasData = true
+			}
+
+			b = append(b, []byte("*2\r\n")...)
+			b = append(b, resp.String(key)...)
+			b = append(b, s.StreamEntriesToResp(entries)...)
+		}
+		return b, hasData
+	}
+
+	var reply []byte
+	hasData := false
+
+	if blockMS == -1 {
+		reply, hasData = xreadData()
+	} else if blockMS > 0 {
+		time.Sleep(time.Millisecond * time.Duration(blockMS))
+		reply, hasData = xreadData()
+	} else {
+		for !hasData {
+			reply, hasData = xreadData()
+			if !hasData {
+				time.Sleep(time.Millisecond * 10)
+			}
+		}
+	}
+
+	if !hasData {
+		reply = resp.NilString()
+	}
+
+	return conn.WriteRawBytes(reply)
 }
 
 func (s *Server) propagate(cmd Command) {
@@ -397,7 +517,7 @@ func (s *Server) asReplica() {
 				return
 			}
 			fmt.Println("replica receives GETACK command from master")
-			reply := [][]byte{[]byte(resp.CmdReplConf), []byte("ACK"), util.Itoa(s.replOffset)}
+			reply := []string{resp.CmdReplConf, "ACK", strconv.Itoa(s.replOffset)}
 			if err := conn.WriteSlice(reply); err != nil {
 				fmt.Println("replica reply GETACK error: ", err.Error())
 			} else {
@@ -475,4 +595,19 @@ func (s *Server) WriteCmdAndCheckReply(conn *Conn, cmd Command, reply string) er
 		return resp.ErrInvalidReply
 	}
 	return nil
+}
+
+func (s *Server) StreamEntriesToResp(entries []*storage.Entry) []byte {
+	b := resp.ArrayHeader(len(entries))
+	for _, e := range entries {
+		b = append(b, []byte("*2\r\n")...)
+		b = append(b, resp.String(e.ID.String())...)
+		pairs := []string{}
+		for _, kv := range e.KVs {
+			pairs = append(pairs, kv.K)
+			pairs = append(pairs, kv.V)
+		}
+		b = append(b, resp.Array(pairs)...)
+	}
+	return b
 }

@@ -59,6 +59,11 @@ func (w *Writer) WriteInt(v int) error {
 	return err
 }
 
+func (w *Writer) WriteRawBytes(b []byte) error {
+	_, err := w.w.Write(b)
+	return err
+}
+
 func (w *Writer) Flush() error {
 	return w.w.Flush()
 }
