@@ -1,4 +1,4 @@
-Golang solutions to the ["Build Your Own Redis" Challenge](https://codecrafters.io/challenges/redis) of CodeCrafters.
+Redis in Golang.
 
 Implemented features:
 - Basic redis serialization protocol

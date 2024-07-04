@@ -9,7 +9,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/codecrafters-io/redis-starter-go/util"
+	"github.com/fukua95/gedis/util"
 )
 
 var (

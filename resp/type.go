@@ -3,7 +3,7 @@ package resp
 import (
 	"fmt"
 
-	"github.com/codecrafters-io/redis-starter-go/util"
+	"github.com/fukua95/gedis/util"
 )
 
 func String(s string) []byte {

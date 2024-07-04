@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/codecrafters-io/redis-starter-go/resp"
+	"github.com/fukua95/gedis/resp"
 )
 
 var (

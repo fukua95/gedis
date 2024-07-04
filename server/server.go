@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/rdb"
-	"github.com/codecrafters-io/redis-starter-go/resp"
-	"github.com/codecrafters-io/redis-starter-go/storage"
-	"github.com/codecrafters-io/redis-starter-go/util"
+	"github.com/fukua95/gedis/rdb"
+	"github.com/fukua95/gedis/resp"
+	"github.com/fukua95/gedis/storage"
+	"github.com/fukua95/gedis/util"
 )
 
 type role string

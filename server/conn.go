@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/resp"
+	"github.com/fukua95/gedis/resp"
 )
 
 type Conn struct {
