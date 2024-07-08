@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fukua95/gedis/resp"
+	"github.com/fukua95/gedis/proto"
 )
 
 var (
@@ -79,9 +79,9 @@ func (cmd *command) SetResult(r interface{}) {
 func (cmd *command) RespLen() int {
 	args := cmd.args
 	l := 0
-	l += len(resp.ArrayHeader(len(args)))
+	l += len(proto.ArrayHeader(len(args)))
 	for _, b := range args {
-		l += len(resp.String(string(b)))
+		l += len(proto.String(string(b)))
 	}
 	return l
 }

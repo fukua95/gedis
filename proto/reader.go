@@ -1,19 +1,13 @@
-package resp
+package proto
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
 
 	"github.com/fukua95/gedis/util"
-)
-
-var (
-	ErrInvalidCommand = errors.New("resp invalid command")
-	ErrInvalidReply   = errors.New("resp wrong reply")
 )
 
 type Reader struct {
@@ -43,10 +37,11 @@ func (r *Reader) ReadReply() (interface{}, error) {
 		return r.bool(line)
 	case RespString:
 		return r.readStringContent(line)
-		//case RespArray, RespSet, RespPush:
-		//	return r.readSlice(line)
-		//case RespMap:
-		//	return r.readMap(line)
+	case RespArray, RespSet, RespPush:
+		return r.readSlice(line)
+	case RespMap:
+		return r.readMap(line)
+		// case RespBigInt, RespVerbatim.
 	}
 	return nil, fmt.Errorf("redis: can't parse %.100q", line)
 }
@@ -114,6 +109,42 @@ func (r *Reader) readStringContent(line []byte) (string, error) {
 	return string(b[:n]), nil
 }
 
+func (r *Reader) readSlice(line []byte) ([]interface{}, error) {
+	n, err := parseLen(line)
+	if err != nil {
+		return nil, err
+	}
+	val := make([]interface{}, n)
+	for i := 0; i < n; i++ {
+		v, err := r.ReadReply()
+		if err != nil {
+			return nil, err
+		}
+		val[i] = v
+	}
+	return val, nil
+}
+
+func (r *Reader) readMap(line []byte) (map[interface{}]interface{}, error) {
+	n, err := parseLen(line)
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[interface{}]interface{}, n)
+	for i := 0; i < n; i++ {
+		k, err := r.ReadReply()
+		if err != nil {
+			return nil, err
+		}
+		v, err := r.ReadReply()
+		if err != nil {
+			return nil, err
+		}
+		m[k] = v
+	}
+	return m, nil
+}
+
 func (r *Reader) ReadInt() (int64, error) {
 	line, err := r.readLine()
 	if err != nil {
@@ -172,24 +203,15 @@ func (r *Reader) ReadSlice() ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.readSliceContent(line)
-}
-
-func (r *Reader) readSliceContent(line []byte) ([][]byte, error) {
-	n, err := parseLen(line)
+	slice, err := r.readSlice(line)
 	if err != nil {
 		return nil, err
 	}
-
-	val := make([][]byte, n)
-	for i := 0; i < n; i++ {
-		v, err := r.ReadString()
-		if err != nil {
-			return nil, err
-		}
-		val[i] = []byte(v)
+	res := make([][]byte, len(slice))
+	for i := 0; i < len(slice); i++ {
+		res[i] = slice[i].([]byte)
 	}
-	return val, nil
+	return res, nil
 }
 
 func parseLen(line []byte) (n int, err error) {

@@ -5,20 +5,20 @@ import (
 	"net"
 	"time"
 
-	"github.com/fukua95/gedis/resp"
+	"github.com/fukua95/gedis/proto"
 )
 
 type Conn struct {
 	netConn net.Conn
-	r       *resp.Reader
-	w       *resp.Writer
+	r       *proto.Reader
+	w       *proto.Writer
 }
 
 func NewConn(conn net.Conn) *Conn {
 	return &Conn{
 		netConn: conn,
-		r:       resp.NewReader(conn),
-		w:       resp.NewWriter(conn),
+		r:       proto.NewReader(conn),
+		w:       proto.NewWriter(conn),
 	}
 }
 

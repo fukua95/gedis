@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fukua95/gedis/resp"
+	"github.com/fukua95/gedis/proto"
 )
 
 const (
@@ -146,10 +146,10 @@ func (s *Store) ValueType(key string) string {
 func (s *Store) generateID(key string, idStr string) (ID, error) {
 	id, err := DecodeID(idStr)
 	if err != nil {
-		return id, resp.ErrStreamIDIllegal
+		return id, proto.ErrStreamIDIllegal
 	}
 	if id.timestamp == 0 && id.seq == 0 {
-		return id, resp.ErrStreamIDIllegal
+		return id, proto.ErrStreamIDIllegal
 	}
 	if id.timestamp == -1 {
 		id.timestamp = time.Now().UnixMilli()
@@ -158,7 +158,7 @@ func (s *Store) generateID(key string, idStr string) (ID, error) {
 	if stream, has := s.streams[Key(key)]; has {
 		lastID := stream.LastEntry().ID
 		if LessThan(id, lastID) || Equal(id, lastID) {
-			return id, resp.ErrStreamIDInvalid
+			return id, proto.ErrStreamIDInvalid
 		}
 		if id.seq == -1 {
 			if id.timestamp == lastID.timestamp {

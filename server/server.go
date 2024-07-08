@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fukua95/gedis/proto"
 	"github.com/fukua95/gedis/rdb"
-	"github.com/fukua95/gedis/resp"
 	"github.com/fukua95/gedis/storage"
 	"github.com/fukua95/gedis/util"
 )
@@ -138,38 +138,38 @@ func (s *Server) handleConn(c net.Conn) {
 		}
 
 		switch cmd.Name() {
-		case resp.CmdEcho:
+		case proto.CmdEcho:
 			err = conn.WriteString(string(cmd.At(1)))
-		case resp.CmdPing:
+		case proto.CmdPing:
 			err = conn.WriteString("PONG")
-		case resp.CmdSet:
+		case proto.CmdSet:
 			err = s.set(conn, cmd)
 			if err != nil {
 				conn.WriteErrorInvalidCmd()
 			}
 			conn.WriteStatusOK()
-		case resp.CmdGet:
+		case proto.CmdGet:
 			err = s.get(conn, cmd)
-		case resp.CmdInfo:
+		case proto.CmdInfo:
 			err = s.info(conn, cmd)
-		case resp.CmdReplConf:
+		case proto.CmdReplConf:
 			err = s.replconf(conn, cmd)
-		case resp.CmdPsync:
+		case proto.CmdPsync:
 			err = s.psync(conn, cmd)
 			isReplica = true
-		case resp.CmdWait:
+		case proto.CmdWait:
 			err = s.wait(conn, cmd)
-		case resp.CmdConfig:
+		case proto.CmdConfig:
 			err = s.config(conn, cmd)
-		case resp.CmdKeys:
+		case proto.CmdKeys:
 			err = s.keys(conn, cmd)
-		case resp.CmdType:
+		case proto.CmdType:
 			err = s.dataType(conn, cmd)
-		case resp.CmdXAdd:
+		case proto.CmdXAdd:
 			err = s.xadd(conn, cmd)
-		case resp.CmdXRange:
+		case proto.CmdXRange:
 			err = s.xrange(conn, cmd)
-		case resp.CmdXRead:
+		case proto.CmdXRead:
 			err = s.xread(conn, cmd)
 		}
 		if err != nil {
@@ -187,7 +187,7 @@ func (s *Server) set(_ *Conn, cmd Command) error {
 	if len(args) < 3 {
 		return errors.New("invalid command")
 	}
-	px, hasPx := cmd.SearchOption(resp.OptionSetEx)
+	px, hasPx := cmd.SearchOption(proto.OptionSetEx)
 	ex := 0
 	var err error
 	if hasPx {
@@ -246,7 +246,7 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 	// repl_id != ? 时, 检查 master's repl_id = repl_id.
 	// offset = -1, 表示从头开始同步: 发送 rdb file + 后续同步.
 	// 这里是 `psync ? -1`, 所以先忽略相关逻辑.
-	status := fmt.Sprintf("%s %s %s", resp.ReplyFullResync, s.replID, strconv.Itoa(int(s.replOffset)))
+	status := fmt.Sprintf("%s %s %s", proto.ReplyFullResync, s.replID, strconv.Itoa(int(s.replOffset)))
 	if err := conn.WriteStatus(status); err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func (s *Server) psync(conn *Conn, cmd Command) error {
 // `wait` should return the number of replicas that sync with master, even if the timeout expires.
 func (s *Server) wait(conn *Conn, cmd Command) error {
 	if len(cmd.Args()) != 3 {
-		return resp.ErrInvalidCommand
+		return proto.ErrInvalidCommand
 	}
 	threshold, _ := util.Atoi(cmd.At(1))
 	timeoutMS, _ := util.Atoi(cmd.At(2))
@@ -282,7 +282,7 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 	replicas := s.replicas.Clone()
 	isSync := make(chan int, len(replicas)+1)
 	syncCount := 0
-	getAckCmd := &command{args: [][]byte{[]byte(resp.CmdReplConf), []byte(resp.OptionGetAck), []byte("*")}}
+	getAckCmd := &command{args: [][]byte{[]byte(proto.CmdReplConf), []byte(proto.OptionGetAck), []byte("*")}}
 	timeout := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
 
 	for _, replica := range replicas {
@@ -302,7 +302,7 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 					return 0
 				}
 
-				if len(reply) != 3 || string(reply[0]) != resp.CmdReplConf || string(reply[1]) != resp.OptionAck {
+				if len(reply) != 3 || string(reply[0]) != proto.CmdReplConf || string(reply[1]) != proto.OptionAck {
 					fmt.Println("master getack reply error: invalid reply")
 					return 0
 				}
@@ -333,10 +333,10 @@ func (s *Server) wait(conn *Conn, cmd Command) error {
 func (s *Server) config(conn *Conn, cmd Command) error {
 	reply := []string{}
 	switch string(cmd.At(2)) {
-	case resp.OptionDir:
-		reply = []string{resp.OptionDir, s.dir}
-	case resp.OptionDBFile:
-		reply = []string{resp.OptionDBFile, s.dbfilename}
+	case proto.OptionDir:
+		reply = []string{proto.OptionDir, s.dir}
+	case proto.OptionDBFile:
+		reply = []string{proto.OptionDBFile, s.dbfilename}
 	}
 	return conn.WriteSlice(reply)
 }
@@ -396,7 +396,7 @@ func (s *Server) xrange(conn *Conn, cmd Command) error {
 func (s *Server) xread(conn *Conn, cmd Command) error {
 	fmt.Println("xread: cmd=", cmd.Args())
 	keysPos, blockMS := 2, -1
-	if string(cmd.At(1)) == resp.OptionBlock {
+	if string(cmd.At(1)) == proto.OptionBlock {
 		blockMS, _ = util.Atoi(cmd.At(2))
 		keysPos = 4
 	}
@@ -414,14 +414,14 @@ func (s *Server) xread(conn *Conn, cmd Command) error {
 	for i, key := range keys {
 		key, start := key, starts[i]
 		fmt.Printf("key=%s, start=%s\n", key, start)
-		if start == resp.OptionStreamIDNewest {
+		if start == proto.OptionStreamIDNewest {
 			starts[i] = s.store.StreamNewestID(key)
 		}
 	}
 
 	xreadData := func() ([]byte, bool) {
 		hasData := false
-		b := resp.ArrayHeader(len(keys))
+		b := proto.ArrayHeader(len(keys))
 		for i, key := range keys {
 			key, start := string(key), string(starts[i])
 
@@ -434,7 +434,7 @@ func (s *Server) xread(conn *Conn, cmd Command) error {
 			}
 
 			b = append(b, []byte("*2\r\n")...)
-			b = append(b, resp.String(key)...)
+			b = append(b, proto.String(key)...)
 			b = append(b, s.StreamEntriesToResp(entries)...)
 		}
 		return b, hasData
@@ -458,7 +458,7 @@ func (s *Server) xread(conn *Conn, cmd Command) error {
 	}
 
 	if !hasData {
-		reply = resp.NilString()
+		reply = proto.NilString()
 	}
 
 	return conn.WriteRawBytes(reply)
@@ -508,16 +508,16 @@ func (s *Server) asReplica() {
 		}
 		// master -> replica, replica 只回复 REPLCONF, 其余 cmd 不回复.
 		switch cmd.Name() {
-		case resp.CmdSet:
+		case proto.CmdSet:
 			s.set(conn, cmd)
-		case resp.CmdReplConf:
-			if len(cmd.Args()) != 3 || string(cmd.At(1)) != resp.OptionGetAck {
+		case proto.CmdReplConf:
+			if len(cmd.Args()) != 3 || string(cmd.At(1)) != proto.OptionGetAck {
 				fmt.Println("Error reading from master: invalid REPLCONF command")
 				conn.WriteErrorInvalidCmd()
 				return
 			}
 			fmt.Println("replica receives GETACK command from master")
-			reply := []string{resp.CmdReplConf, "ACK", strconv.Itoa(s.replOffset)}
+			reply := []string{proto.CmdReplConf, "ACK", strconv.Itoa(s.replOffset)}
 			if err := conn.WriteSlice(reply); err != nil {
 				fmt.Println("replica reply GETACK error: ", err.Error())
 			} else {
@@ -529,15 +529,15 @@ func (s *Server) asReplica() {
 }
 
 func (s *Server) handshake(conn *Conn) error {
-	cmd := &command{args: [][]byte{[]byte(resp.CmdPing)}}
+	cmd := &command{args: [][]byte{[]byte(proto.CmdPing)}}
 	if err := s.WriteCmdAndCheckReply(conn, cmd, "pong"); err != nil {
 		return err
 	}
 
 	cmd = &command{
 		args: [][]byte{
-			[]byte(resp.CmdReplConf),
-			[]byte(resp.OptionReplLPort),
+			[]byte(proto.CmdReplConf),
+			[]byte(proto.OptionReplLPort),
 			[]byte(s.port),
 		},
 	}
@@ -547,8 +547,8 @@ func (s *Server) handshake(conn *Conn) error {
 
 	cmd = &command{
 		args: [][]byte{
-			[]byte(resp.CmdReplConf),
-			[]byte(resp.OptionReplCapa),
+			[]byte(proto.CmdReplConf),
+			[]byte(proto.OptionReplCapa),
 			[]byte("psync2"),
 		},
 	}
@@ -561,7 +561,7 @@ func (s *Server) handshake(conn *Conn) error {
 func (s *Server) requestFullResync(conn *Conn) error {
 	// replica sens a `PSYNC ? -1` to tell the master that it doesn't have any data,
 	// and needs to be full resynchronized.
-	cmd := &command{args: [][]byte{[]byte(resp.CmdPsync), []byte("?"), []byte("-1")}}
+	cmd := &command{args: [][]byte{[]byte(proto.CmdPsync), []byte("?"), []byte("-1")}}
 	if err := conn.WriteCommand(cmd); err != nil {
 		return err
 	}
@@ -570,8 +570,8 @@ func (s *Server) requestFullResync(conn *Conn) error {
 		return err
 	}
 	reply := strings.Split(replyStr, " ")
-	if len(reply) != 3 || reply[0] != resp.ReplyFullResync {
-		return resp.ErrInvalidReply
+	if len(reply) != 3 || reply[0] != proto.ReplyFullResync {
+		return proto.ErrInvalidReply
 	}
 	s.replID = reply[1]
 	s.replOffset, _ = strconv.Atoi(reply[2])
@@ -592,22 +592,22 @@ func (s *Server) WriteCmdAndCheckReply(conn *Conn, cmd Command, reply string) er
 		return err
 	}
 	if !strings.EqualFold(v, reply) {
-		return resp.ErrInvalidReply
+		return proto.ErrInvalidReply
 	}
 	return nil
 }
 
 func (s *Server) StreamEntriesToResp(entries []*storage.Entry) []byte {
-	b := resp.ArrayHeader(len(entries))
+	b := proto.ArrayHeader(len(entries))
 	for _, e := range entries {
 		b = append(b, []byte("*2\r\n")...)
-		b = append(b, resp.String(e.ID.String())...)
+		b = append(b, proto.String(e.ID.String())...)
 		pairs := []string{}
 		for _, kv := range e.KVs {
 			pairs = append(pairs, kv.K)
 			pairs = append(pairs, kv.V)
 		}
-		b = append(b, resp.Array(pairs)...)
+		b = append(b, proto.Array(pairs)...)
 	}
 	return b
 }
